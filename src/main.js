@@ -7,10 +7,15 @@ const BOARD_SIZE = 7;
 const TILE_SIZE = 1;
 const CAMERA_HEIGHT = 15;
 const MOVE_DURATION = 0.18;
+const MAX_LIVES = 2;
 
 const root = document.querySelector('#root');
 const startMenu = document.querySelector('#start-menu');
 const startButton = document.querySelector('#start-button');
+const gameOverMenu = document.querySelector('#game-over-menu');
+const restartButton = document.querySelector('#restart-button');
+const levelCounter = document.querySelector('#level-counter');
+const livesCounter = document.querySelector('#lives-counter');
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -23,6 +28,9 @@ const clock = new THREE.Clock();
 let moveTween = null;
 let isRestarting = false;
 let hasStarted = false;
+let isGameOver = false;
+let level = 1;
+let lives = MAX_LIVES;
 const destroyEffects = [];
 let goalHint = null;
 
@@ -133,7 +141,7 @@ const character = new THREE.Mesh(
   })
 );
 character.position.set(0, 0.26, 0);
-character.rotation.y = Math.PI;
+character.rotation.y = Math.PI * 1.5;
 scene.add(character);
 
 const characterOutline = new THREE.LineSegments(
@@ -170,7 +178,7 @@ function createSwapHexagon(color, outlineColor, gridPosition) {
     0.26,
     gridPosition.row * TILE_SIZE - offset
   );
-  hexagon.rotation.y = Math.PI;
+  hexagon.rotation.y = Math.PI * 1.5;
 
   const outline = new THREE.LineSegments(
     new THREE.EdgesGeometry(hexagon.geometry),
@@ -243,6 +251,7 @@ function disposeHexagon(hexagon) {
 
 function resetGame() {
   isRestarting = false;
+  isGameOver = false;
   moveTween = null;
   hideSwapIndicators();
   swapHexagons.forEach(disposeHexagon);
@@ -250,10 +259,20 @@ function resetGame() {
   characterGrid.col = Math.floor(BOARD_SIZE / 2);
   characterGrid.row = Math.floor(BOARD_SIZE / 2);
   character.material.color.setHex(PLAYER_START_COLOR);
+  lives = MAX_LIVES;
+  updateLivesCounter();
   placeCharacterOnGrid();
   populateHexagons();
   updateGoalHint();
   updateSwapIndicators();
+}
+
+function updateLevelCounter() {
+  levelCounter.textContent = `Level ${level}`;
+}
+
+function updateLivesCounter() {
+  livesCounter.textContent = `Lives ${lives}`;
 }
 
 function getGridPosition(col, row) {
@@ -314,21 +333,21 @@ function updateSwapIndicators() {
     return;
   }
 
-  const nearbyDifferentHexagons = swapHexagons.filter((hexagon) => {
+  const nearbySameColorHexagons = swapHexagons.filter((hexagon) => {
     const distance =
       Math.abs(characterGrid.col - hexagon.grid.col) + Math.abs(characterGrid.row - hexagon.grid.row);
 
-    return distance === 1 && !character.material.color.equals(hexagon.mesh.material.color);
+    return distance === 1 && character.material.color.equals(hexagon.mesh.material.color);
   });
 
-  if (nearbyDifferentHexagons.length === 0) {
+  if (nearbySameColorHexagons.length === 0) {
     hideSwapIndicators();
     return;
   }
 
   hideSwapIndicators();
 
-  nearbyDifferentHexagons.forEach((hexagon, index) => {
+  nearbySameColorHexagons.forEach((hexagon, index) => {
     const indicator = getSwapIndicator(index);
     const minCol = Math.min(characterGrid.col, hexagon.grid.col);
     const maxCol = Math.max(characterGrid.col, hexagon.grid.col);
@@ -348,7 +367,7 @@ function updateSwapIndicators() {
 }
 
 function moveCharacterByTile(code) {
-  if (moveTween || isRestarting) return;
+  if (moveTween || isRestarting || isGameOver) return;
 
   let nextCol = characterGrid.col;
   let nextRow = characterGrid.row;
@@ -397,12 +416,45 @@ function swapHexagonColors(hexagon) {
   character.material.color.copy(hexagon.mesh.material.color);
   hexagon.mesh.material.color.copy(characterColor);
   updateGoalHint();
+  loseLife();
 }
 
 function destroyHexagon(hexagon) {
   createDestroyEffect(hexagon.mesh.position);
   disposeHexagon(hexagon);
   swapHexagons = swapHexagons.filter((current) => current !== hexagon);
+  gainLife();
+}
+
+function loseLife() {
+  lives = Math.max(lives - 1, 0);
+  updateLivesCounter();
+
+  if (lives === 0) {
+    showGameOver();
+  }
+}
+
+function gainLife() {
+  lives = Math.min(lives + 1, MAX_LIVES);
+  updateLivesCounter();
+}
+
+function showGameOver() {
+  isGameOver = true;
+  hasStarted = false;
+  moveTween = null;
+  hideSwapIndicators();
+  hideGoalHint();
+  gameOverMenu.classList.remove('hidden');
+}
+
+function restartAfterGameOver() {
+  level = 1;
+  updateLevelCounter();
+  gameOverMenu.classList.add('hidden');
+  hasStarted = true;
+  resetGame();
 }
 
 function checkWinCondition() {
@@ -410,6 +462,8 @@ function checkWinCondition() {
   if (!goalColor || character.material.color.getHex() !== goalColor || isRestarting) return;
 
   isRestarting = true;
+  level += 1;
+  updateLevelCounter();
   hideSwapIndicators();
   hideGoalHint();
   window.setTimeout(resetGame, 500);
@@ -581,14 +635,17 @@ function animate() {
   renderer.render(scene, camera);
 }
 
+updateLevelCounter();
+updateLivesCounter();
 resetGame();
 window.addEventListener('resize', resize);
 startButton.addEventListener('click', () => {
   hasStarted = true;
   startMenu.classList.add('hidden');
 });
+restartButton.addEventListener('click', restartAfterGameOver);
 window.addEventListener('keydown', (event) => {
-  if (!hasStarted) return;
+  if (!hasStarted || isGameOver) return;
   if (event.repeat || !['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) return;
   moveCharacterByTile(event.code);
 });

@@ -62,7 +62,8 @@ canvas {
   line-height: 1.05;
 }
 
-#start-button {
+#start-button,
+#restart-button {
   min-width: 132px;
   padding: 12px 22px;
   color: #13201d;
@@ -73,6 +74,29 @@ canvas {
   cursor: pointer;
 }
 
-#start-button:hover {
+#start-button:hover,
+#restart-button:hover {
   background: #ffd84d;
+}
+
+.level-counter {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 4;
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(20, 28, 27, 0.76);
+}
+
+.lives-counter {
+  left: auto;
+  right: 18px;
+  transform: none;
 }
