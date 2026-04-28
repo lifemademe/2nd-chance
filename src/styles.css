@@ -30,7 +30,13 @@ canvas {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(12, 18, 18, 0.76);
+  background:
+    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.9) 0 1px, transparent 2px),
+    radial-gradient(circle at 72% 18%, rgba(255, 255, 255, 0.72) 0 1px, transparent 2px),
+    radial-gradient(circle at 82% 68%, rgba(255, 255, 255, 0.78) 0 1px, transparent 2px),
+    radial-gradient(circle at 32% 76%, rgba(255, 255, 255, 0.62) 0 1px, transparent 2px),
+    radial-gradient(circle at 58% 48%, rgba(75, 116, 255, 0.28), transparent 24%),
+    linear-gradient(180deg, rgba(4, 7, 18, 0.94), rgba(8, 12, 27, 0.9));
   color: #ffffff;
 }
 
@@ -44,8 +50,17 @@ canvas {
   text-align: center;
   border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 8px;
-  background: rgba(20, 28, 27, 0.78);
+  background: rgba(9, 13, 28, 0.82);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+}
+
+.start-icon {
+  display: block;
+  width: 86px;
+  height: 86px;
+  margin: 0 auto 16px;
+  object-fit: cover;
+  border-radius: 8px;
 }
 
 .eyebrow {

@@ -37,13 +37,13 @@ let goalHint = null;
 const HEX_COLORS = [
   { name: 'yellow', value: 0xffd84d, outline: 0xfff6bf },
   { name: 'green', value: 0x25b864, outline: 0xe9fff1 },
-  { name: 'blue', value: 0x4b74ff, outline: 0xf6f8ff },
+  { name: 'blue', value: 0x4fc3f7, outline: 0xe8f8ff },
   { name: 'red', value: 0xd93f35, outline: 0xffeeee }
 ];
 
-const PLAYER_START_COLOR = 0x4b74ff;
+const PLAYER_START_COLOR = 0x4fc3f7;
 
-scene.background = new THREE.Color(0xbfd4df);
+scene.background = new THREE.Color(0x050816);
 
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -72,6 +72,30 @@ const fill = new THREE.PointLight(0xffffff, 1.5, 8);
 fill.position.set(-3, -1, 2);
 scene.add(fill);
 
+const starsGeometry = new THREE.BufferGeometry();
+const starPositions = [];
+
+for (let index = 0; index < 360; index += 1) {
+  starPositions.push(
+    THREE.MathUtils.randFloatSpread(38),
+    THREE.MathUtils.randFloat(4, 11),
+    THREE.MathUtils.randFloatSpread(38)
+  );
+}
+
+starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+const stars = new THREE.Points(
+  starsGeometry,
+  new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: 0.055,
+    transparent: true,
+    opacity: 0.86,
+    sizeAttenuation: true
+  })
+);
+scene.add(stars);
+
 const darkTile = new THREE.MeshStandardMaterial({
   color: 0x8a5a35,
   roughness: 0.82,
@@ -87,21 +111,21 @@ const lightTile = new THREE.MeshStandardMaterial({
 const cornerTiles = {
   '0,0': new THREE.MeshStandardMaterial({ color: 0xffd84d, roughness: 0.78, metalness: 0.02 }),
   '6,0': new THREE.MeshStandardMaterial({ color: 0x25b864, roughness: 0.78, metalness: 0.02 }),
-  '0,6': new THREE.MeshStandardMaterial({ color: 0x4b74ff, roughness: 0.78, metalness: 0.02 }),
+  '0,6': new THREE.MeshStandardMaterial({ color: 0x4fc3f7, roughness: 0.78, metalness: 0.02 }),
   '6,6': new THREE.MeshStandardMaterial({ color: 0xd93f35, roughness: 0.78, metalness: 0.02 })
 };
 
 const cornerGoals = {
   '0,0': 0xffd84d,
   '6,0': 0x25b864,
-  '0,6': 0x4b74ff,
+  '0,6': 0x4fc3f7,
   '6,6': 0xd93f35
 };
 
 const goalCorners = [
   { col: 0, row: 0, color: 0xffd84d },
   { col: 6, row: 0, color: 0x25b864 },
-  { col: 0, row: 6, color: 0x4b74ff },
+  { col: 0, row: 6, color: 0x4fc3f7 },
   { col: 6, row: 6, color: 0xd93f35 }
 ];
 
