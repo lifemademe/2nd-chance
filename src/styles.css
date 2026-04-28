@@ -115,3 +115,30 @@ canvas {
   right: 18px;
   transform: none;
 }
+
+.tutorial-popup {
+  position: fixed;
+  left: 50%;
+  top: 18px;
+  z-index: 5;
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px 16px;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(20, 28, 27, 0.82);
+}
+
+.tutorial-popup.hidden {
+  display: none;
+}
+
+.tutorial-life-popup {
+  top: auto;
+  bottom: 64px;
+}

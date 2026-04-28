@@ -16,6 +16,8 @@ const gameOverMenu = document.querySelector('#game-over-menu');
 const restartButton = document.querySelector('#restart-button');
 const levelCounter = document.querySelector('#level-counter');
 const livesCounter = document.querySelector('#lives-counter');
+const tutorialPopup = document.querySelector('#tutorial-popup');
+const tutorialLifePopup = document.querySelector('#tutorial-life-popup');
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -29,10 +31,14 @@ let moveTween = null;
 let isRestarting = false;
 let hasStarted = false;
 let isGameOver = false;
+let isTutorial = true;
+let tutorialStep = 'break';
 let level = 1;
 let lives = MAX_LIVES;
 const destroyEffects = [];
 let goalHint = null;
+let tutorialLockedHexagon = null;
+let tutorialLockedIndicator = null;
 
 const HEX_COLORS = [
   { name: 'yellow', value: 0xffd84d, outline: 0xfff6bf },
@@ -42,8 +48,9 @@ const HEX_COLORS = [
 ];
 
 const PLAYER_START_COLOR = 0x4fc3f7;
+const TUTORIAL_SWITCH_COLOR = 0x25b864;
 
-scene.background = new THREE.Color(0x050816);
+scene.background = new THREE.Color(0x8ed7f0);
 
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -72,29 +79,105 @@ const fill = new THREE.PointLight(0xffffff, 1.5, 8);
 fill.position.set(-3, -1, 2);
 scene.add(fill);
 
-const starsGeometry = new THREE.BufferGeometry();
-const starPositions = [];
+const water = new THREE.Mesh(
+  new THREE.PlaneGeometry(36, 36),
+  new THREE.MeshBasicMaterial({ color: 0x35b7d5 })
+);
+water.rotation.x = -Math.PI / 2;
+water.position.y = -0.46;
+scene.add(water);
 
-for (let index = 0; index < 360; index += 1) {
-  starPositions.push(
-    THREE.MathUtils.randFloatSpread(38),
-    THREE.MathUtils.randFloat(4, 11),
-    THREE.MathUtils.randFloatSpread(38)
-  );
+const islandShape = new THREE.Shape();
+[
+  [0, -5.35],
+  [1.45, -5.05],
+  [3.1, -4.38],
+  [4.72, -2.72],
+  [5.25, -0.78],
+  [4.8, 1.35],
+  [3.52, 3.65],
+  [1.28, 4.96],
+  [-0.9, 5.35],
+  [-3.0, 4.62],
+  [-4.85, 2.85],
+  [-5.38, 0.62],
+  [-4.82, -1.72],
+  [-3.25, -3.82],
+  [-1.25, -5.1]
+].forEach(([x, z], index) => {
+  if (index === 0) {
+    islandShape.moveTo(x, z);
+  } else {
+    islandShape.lineTo(x, z);
+  }
+});
+islandShape.closePath();
+
+const island = new THREE.Mesh(
+  new THREE.ExtrudeGeometry(islandShape, {
+    depth: 0.32,
+    bevelEnabled: true,
+    bevelThickness: 0.08,
+    bevelSize: 0.14,
+    bevelSegments: 2
+  }),
+  new THREE.MeshStandardMaterial({ color: 0xd8b56f, roughness: 0.86, metalness: 0 })
+);
+island.rotation.x = -Math.PI / 2;
+island.position.y = -0.48;
+scene.add(island);
+
+const waterRings = new THREE.Group();
+const waveMaterial = new THREE.MeshBasicMaterial({
+  color: 0xd8f8ff,
+  transparent: true,
+  opacity: 0.42
+});
+
+[6.1, 7.2, 8.4].forEach((radius) => {
+  const wave = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.015, 8, 128), waveMaterial.clone());
+  wave.rotation.x = -Math.PI / 2;
+  wave.position.y = -0.31;
+  waterRings.add(wave);
+});
+
+scene.add(waterRings);
+
+const trees = new THREE.Group();
+const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x7a4b2a, roughness: 0.85 });
+const leafMaterials = [
+  new THREE.MeshStandardMaterial({ color: 0x2f8f4e, roughness: 0.82 }),
+  new THREE.MeshStandardMaterial({ color: 0x3fb96b, roughness: 0.82 })
+];
+const trunkGeometry = new THREE.CylinderGeometry(0.045, 0.06, 0.32, 8);
+const leafGeometry = new THREE.ConeGeometry(0.22, 0.46, 8);
+
+function createTree(x, z, scale = 1, leafIndex = 0) {
+  const tree = new THREE.Group();
+  const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+  const leaves = new THREE.Mesh(leafGeometry, leafMaterials[leafIndex % leafMaterials.length]);
+
+  trunk.position.y = 0.02;
+  leaves.position.y = 0.37;
+  tree.add(trunk, leaves);
+  tree.position.set(x, -0.1, z);
+  tree.scale.setScalar(scale);
+  tree.rotation.y = Math.random() * Math.PI;
+  trees.add(tree);
 }
 
-starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
-const stars = new THREE.Points(
-  starsGeometry,
-  new THREE.PointsMaterial({
-    color: 0xffffff,
-    size: 0.055,
-    transparent: true,
-    opacity: 0.86,
-    sizeAttenuation: true
-  })
-);
-scene.add(stars);
+[
+  [-4.55, -1.8, 1.15],
+  [-4.2, 1.45, 0.95],
+  [-2.9, -3.8, 0.9],
+  [-1.35, 4.45, 1.05],
+  [1.8, -4.25, 1.0],
+  [3.75, 2.85, 1.1],
+  [4.45, -0.65, 0.92],
+  [2.8, 4.0, 0.88]
+].forEach(([x, z, scale], index) => createTree(x, z, scale, index));
+
+scene.add(trees);
 
 const darkTile = new THREE.MeshStandardMaterial({
   color: 0x8a5a35,
@@ -226,10 +309,17 @@ const swapIndicatorMaterial = new THREE.MeshBasicMaterial({
   side: THREE.DoubleSide
 });
 const swapIndicators = [];
+const tutorialLockedIndicatorMaterial = new THREE.MeshBasicMaterial({
+  color: 0xd93f35,
+  transparent: false,
+  opacity: 1,
+  side: THREE.DoubleSide
+});
 
 const gui = new GUI({ title: 'Scene' });
 gui.addFolder('Character');
 gui.addFolder('Camera');
+gui.close();
 
 function placeCharacterOnGrid() {
   character.position.x = characterGrid.col * TILE_SIZE - offset;
@@ -263,6 +353,11 @@ function populateHexagons() {
   }
 }
 
+function populateTutorialHexagons() {
+  swapHexagons.push(createSwapHexagon(PLAYER_START_COLOR, 0xe8f8ff, { col: 3, row: 2 }));
+  swapHexagons.push(createSwapHexagon(TUTORIAL_SWITCH_COLOR, 0xe9fff1, { col: 4, row: 2 }));
+}
+
 function disposeHexagon(hexagon) {
   scene.remove(hexagon.mesh);
   hexagon.mesh.children.forEach((child) => {
@@ -273,19 +368,48 @@ function disposeHexagon(hexagon) {
   hexagon.mesh.material.dispose();
 }
 
-function resetGame() {
+function clearHexagons() {
+  swapHexagons.forEach(disposeHexagon);
+  swapHexagons = [];
+}
+
+function resetBoard() {
   isRestarting = false;
   isGameOver = false;
   moveTween = null;
   hideSwapIndicators();
-  swapHexagons.forEach(disposeHexagon);
-  swapHexagons = [];
+  clearHexagons();
   characterGrid.col = Math.floor(BOARD_SIZE / 2);
   characterGrid.row = Math.floor(BOARD_SIZE / 2);
   character.material.color.setHex(PLAYER_START_COLOR);
   lives = MAX_LIVES;
   updateLivesCounter();
   placeCharacterOnGrid();
+  updateGoalHint();
+  updateSwapIndicators();
+}
+
+function startTutorial() {
+  isTutorial = true;
+  tutorialStep = 'break';
+  tutorialLockedHexagon = null;
+  hideTutorialLockedIndicator();
+  tutorialLifePopup.classList.add('hidden');
+  resetBoard();
+  clearHexagons();
+  populateTutorialHexagons();
+  updateTutorialPopup();
+  updateGoalHint();
+  updateSwapIndicators();
+}
+
+function startNormalGame() {
+  isTutorial = false;
+  tutorialLockedHexagon = null;
+  hideTutorialLockedIndicator();
+  tutorialPopup.classList.add('hidden');
+  tutorialLifePopup.classList.add('hidden');
+  resetBoard();
   populateHexagons();
   updateGoalHint();
   updateSwapIndicators();
@@ -297,6 +421,36 @@ function updateLevelCounter() {
 
 function updateLivesCounter() {
   livesCounter.textContent = `Lives ${lives}`;
+}
+
+function updateTutorialPopup() {
+  if (!isTutorial) {
+    tutorialPopup.classList.add('hidden');
+    return;
+  }
+
+  const messages = {
+    break: 'Press W to break the matching blue hex.',
+    swap: 'Press D to swap colors with the green hex.',
+    goal: 'Move to the pulsing green corner to begin the game.'
+  };
+
+  tutorialPopup.textContent = messages[tutorialStep];
+  tutorialPopup.classList.toggle('hidden', !hasStarted);
+}
+
+function advanceTutorialStep(nextStep) {
+  if (!isTutorial) return;
+
+  tutorialStep = nextStep;
+  updateTutorialPopup();
+}
+
+function isTutorialMoveAllowed(code) {
+  if (!isTutorial) return true;
+  if (tutorialStep === 'break') return code === 'KeyW';
+  if (tutorialStep === 'swap') return code === 'KeyD';
+  return true;
 }
 
 function getGridPosition(col, row) {
@@ -351,6 +505,32 @@ function getSwapIndicator(index) {
   return indicator;
 }
 
+function getTutorialLockedIndicator() {
+  if (tutorialLockedIndicator) return tutorialLockedIndicator;
+
+  tutorialLockedIndicator = new THREE.Mesh(
+    createRoundedRectRingGeometry(TILE_SIZE + 0.18, TILE_SIZE + 0.18, 0.08, 0.18),
+    tutorialLockedIndicatorMaterial
+  );
+  tutorialLockedIndicator.rotation.x = -Math.PI / 2;
+  tutorialLockedIndicator.position.y = 0.19;
+  tutorialLockedIndicator.visible = false;
+  scene.add(tutorialLockedIndicator);
+
+  return tutorialLockedIndicator;
+}
+
+function hideTutorialLockedIndicator() {
+  if (tutorialLockedIndicator) tutorialLockedIndicator.visible = false;
+}
+
+function showTutorialLockedIndicator(hexagon) {
+  const indicator = getTutorialLockedIndicator();
+  indicator.position.x = hexagon.grid.col * TILE_SIZE - offset;
+  indicator.position.z = hexagon.grid.row * TILE_SIZE - offset;
+  indicator.visible = true;
+}
+
 function updateSwapIndicators() {
   if (isRestarting) {
     hideSwapIndicators();
@@ -392,6 +572,7 @@ function updateSwapIndicators() {
 
 function moveCharacterByTile(code) {
   if (moveTween || isRestarting || isGameOver) return;
+  if (!isTutorialMoveAllowed(code)) return;
 
   let nextCol = characterGrid.col;
   let nextRow = characterGrid.row;
@@ -409,6 +590,8 @@ function moveCharacterByTile(code) {
   const targetHexagon = swapHexagons.find((hexagon) => nextCol === hexagon.grid.col && nextRow === hexagon.grid.row);
 
   if (targetHexagon) {
+    if (isTutorial && targetHexagon === tutorialLockedHexagon) return;
+
     if (!character.material.color.equals(targetHexagon.mesh.material.color)) {
       swapHexagonColors(targetHexagon);
       updateSwapIndicators();
@@ -441,6 +624,13 @@ function swapHexagonColors(hexagon) {
   hexagon.mesh.material.color.copy(characterColor);
   updateGoalHint();
   loseLife();
+
+  if (isTutorial && tutorialStep === 'swap') {
+    tutorialLockedHexagon = hexagon;
+    showTutorialLockedIndicator(hexagon);
+    tutorialLifePopup.classList.remove('hidden');
+    advanceTutorialStep('goal');
+  }
 }
 
 function destroyHexagon(hexagon) {
@@ -448,6 +638,10 @@ function destroyHexagon(hexagon) {
   disposeHexagon(hexagon);
   swapHexagons = swapHexagons.filter((current) => current !== hexagon);
   gainLife();
+
+  if (isTutorial && tutorialStep === 'break') {
+    advanceTutorialStep('swap');
+  }
 }
 
 function loseLife() {
@@ -478,7 +672,7 @@ function restartAfterGameOver() {
   updateLevelCounter();
   gameOverMenu.classList.add('hidden');
   hasStarted = true;
-  resetGame();
+  startTutorial();
 }
 
 function checkWinCondition() {
@@ -486,11 +680,18 @@ function checkWinCondition() {
   if (!goalColor || character.material.color.getHex() !== goalColor || isRestarting) return;
 
   isRestarting = true;
-  level += 1;
-  updateLevelCounter();
   hideSwapIndicators();
   hideGoalHint();
-  window.setTimeout(resetGame, 500);
+
+  if (isTutorial) {
+    tutorialPopup.classList.add('hidden');
+    window.setTimeout(startNormalGame, 500);
+    return;
+  }
+
+  level += 1;
+  updateLevelCounter();
+  window.setTimeout(startNormalGame, 500);
 }
 
 function createGoalHint() {
@@ -561,6 +762,16 @@ function updateGoalHintEffect(delta) {
   goalHint.glow.scale.setScalar(1.05 + pulse * 0.45);
   goalHint.ring.material.opacity = 0.58 + pulse * 0.38;
   goalHint.glow.material.opacity = 0.1 + pulse * 0.18;
+}
+
+function updateWaterEffect(delta) {
+  waterRings.rotation.y += delta * 0.08;
+
+  waterRings.children.forEach((wave, index) => {
+    const pulse = (Math.sin(clock.elapsedTime * 1.4 + index * 1.7) + 1) / 2;
+    wave.material.opacity = 0.18 + pulse * 0.24;
+    wave.scale.setScalar(1 + pulse * 0.018);
+  });
 }
 
 function createDestroyEffect(position) {
@@ -655,17 +866,19 @@ function animate() {
   updateCharacterMove(delta);
   updateDestroyEffects(delta);
   updateGoalHintEffect(delta);
+  updateWaterEffect(delta);
   controls.update();
   renderer.render(scene, camera);
 }
 
 updateLevelCounter();
 updateLivesCounter();
-resetGame();
+startTutorial();
 window.addEventListener('resize', resize);
 startButton.addEventListener('click', () => {
   hasStarted = true;
   startMenu.classList.add('hidden');
+  updateTutorialPopup();
 });
 restartButton.addEventListener('click', restartAfterGameOver);
 window.addEventListener('keydown', (event) => {
