@@ -22,3 +22,57 @@ body {
 canvas {
   display: block;
 }
+
+.start-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(12, 18, 18, 0.76);
+  color: #ffffff;
+}
+
+.start-menu.hidden {
+  display: none;
+}
+
+.start-panel {
+  width: min(420px, 100%);
+  padding: 28px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(20, 28, 27, 0.78);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: #ffd84d;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.start-panel h1 {
+  margin: 0 0 22px;
+  font-size: 2rem;
+  line-height: 1.05;
+}
+
+#start-button {
+  min-width: 132px;
+  padding: 12px 22px;
+  color: #13201d;
+  font-weight: 700;
+  border: 0;
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+#start-button:hover {
+  background: #ffd84d;
+}

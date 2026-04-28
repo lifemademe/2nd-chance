@@ -9,6 +9,8 @@ const CAMERA_HEIGHT = 15;
 const MOVE_DURATION = 0.18;
 
 const root = document.querySelector('#root');
+const startMenu = document.querySelector('#start-menu');
+const startButton = document.querySelector('#start-button');
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -20,7 +22,9 @@ const characterGrid = {
 const clock = new THREE.Clock();
 let moveTween = null;
 let isRestarting = false;
+let hasStarted = false;
 const destroyEffects = [];
+let goalHint = null;
 
 const HEX_COLORS = [
   { name: 'yellow', value: 0xffd84d, outline: 0xfff6bf },
@@ -35,8 +39,6 @@ scene.background = new THREE.Color(0xbfd4df);
 
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 root.appendChild(renderer.domElement);
 
 camera.position.set(0, CAMERA_HEIGHT, 0.001);
@@ -56,8 +58,6 @@ scene.add(ambient);
 
 const key = new THREE.DirectionalLight(0xffffff, 2.4);
 key.position.set(3, 4, 5);
-key.castShadow = true;
-key.shadow.mapSize.set(2048, 2048);
 scene.add(key);
 
 const fill = new THREE.PointLight(0xffffff, 1.5, 8);
@@ -90,6 +90,13 @@ const cornerGoals = {
   '6,6': 0xd93f35
 };
 
+const goalCorners = [
+  { col: 0, row: 0, color: 0xffd84d },
+  { col: 6, row: 0, color: 0x25b864 },
+  { col: 0, row: 6, color: 0x4b74ff },
+  { col: 6, row: 6, color: 0xd93f35 }
+];
+
 const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x26352f, transparent: true, opacity: 0.36 });
 const tileGeometry = new THREE.BoxGeometry(TILE_SIZE, 0.16, TILE_SIZE);
 const lineGeometry = new THREE.EdgesGeometry(tileGeometry);
@@ -100,8 +107,6 @@ for (let row = 0; row < BOARD_SIZE; row += 1) {
     const tileMaterial = cornerTiles[`${col},${row}`] || ((row + col) % 2 === 0 ? lightTile : darkTile);
     const tile = new THREE.Mesh(tileGeometry, tileMaterial);
     tile.position.set(col * TILE_SIZE - offset, 0, row * TILE_SIZE - offset);
-    tile.castShadow = true;
-    tile.receiveShadow = true;
     board.add(tile);
 
     const outline = new THREE.LineSegments(lineGeometry, edgeMaterial);
@@ -115,7 +120,6 @@ const base = new THREE.Mesh(
   new THREE.MeshStandardMaterial({ color: 0x3f5249, roughness: 0.9 })
 );
 base.position.y = -0.2;
-base.receiveShadow = true;
 scene.add(base);
 
 scene.add(board);
@@ -130,7 +134,6 @@ const character = new THREE.Mesh(
 );
 character.position.set(0, 0.26, 0);
 character.rotation.y = Math.PI;
-character.castShadow = true;
 scene.add(character);
 
 const characterOutline = new THREE.LineSegments(
@@ -168,7 +171,6 @@ function createSwapHexagon(color, outlineColor, gridPosition) {
     gridPosition.row * TILE_SIZE - offset
   );
   hexagon.rotation.y = Math.PI;
-  hexagon.castShadow = true;
 
   const outline = new THREE.LineSegments(
     new THREE.EdgesGeometry(hexagon.geometry),
@@ -250,6 +252,7 @@ function resetGame() {
   character.material.color.setHex(PLAYER_START_COLOR);
   placeCharacterOnGrid();
   populateHexagons();
+  updateGoalHint();
   updateSwapIndicators();
 }
 
@@ -393,6 +396,7 @@ function swapHexagonColors(hexagon) {
   const characterColor = character.material.color.clone();
   character.material.color.copy(hexagon.mesh.material.color);
   hexagon.mesh.material.color.copy(characterColor);
+  updateGoalHint();
 }
 
 function destroyHexagon(hexagon) {
@@ -407,7 +411,78 @@ function checkWinCondition() {
 
   isRestarting = true;
   hideSwapIndicators();
+  hideGoalHint();
   window.setTimeout(resetGame, 500);
+}
+
+function createGoalHint() {
+  const group = new THREE.Group();
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.38, 0.46, 48),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide
+    })
+  );
+  const glow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.36, 48),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.18,
+      side: THREE.DoubleSide
+    })
+  );
+
+  ring.rotation.x = -Math.PI / 2;
+  glow.rotation.x = -Math.PI / 2;
+  group.position.y = 0.22;
+  group.add(glow, ring);
+  scene.add(group);
+
+  return {
+    group,
+    ring,
+    glow,
+    elapsed: 0
+  };
+}
+
+function hideGoalHint() {
+  if (goalHint) goalHint.group.visible = false;
+}
+
+function updateGoalHint() {
+  if (!goalHint) goalHint = createGoalHint();
+
+  const playerColor = character.material.color.getHex();
+  const matchingGoal = goalCorners.find((corner) => corner.color === playerColor);
+
+  if (!matchingGoal) {
+    hideGoalHint();
+    return;
+  }
+
+  goalHint.group.position.x = matchingGoal.col * TILE_SIZE - offset;
+  goalHint.group.position.z = matchingGoal.row * TILE_SIZE - offset;
+  goalHint.ring.material.color.setHex(playerColor);
+  goalHint.glow.material.color.setHex(playerColor);
+  goalHint.group.visible = true;
+}
+
+function updateGoalHintEffect(delta) {
+  if (!goalHint || !goalHint.group.visible) return;
+
+  goalHint.elapsed += delta;
+  const pulse = (Math.sin(goalHint.elapsed * 5) + 1) / 2;
+  const scale = 1 + pulse * 0.28;
+
+  goalHint.ring.scale.setScalar(scale);
+  goalHint.glow.scale.setScalar(1.05 + pulse * 0.45);
+  goalHint.ring.material.opacity = 0.58 + pulse * 0.38;
+  goalHint.glow.material.opacity = 0.1 + pulse * 0.18;
 }
 
 function createDestroyEffect(position) {
@@ -501,13 +576,19 @@ function animate() {
   const delta = clock.getDelta();
   updateCharacterMove(delta);
   updateDestroyEffects(delta);
+  updateGoalHintEffect(delta);
   controls.update();
   renderer.render(scene, camera);
 }
 
 resetGame();
 window.addEventListener('resize', resize);
+startButton.addEventListener('click', () => {
+  hasStarted = true;
+  startMenu.classList.add('hidden');
+});
 window.addEventListener('keydown', (event) => {
+  if (!hasStarted) return;
   if (event.repeat || !['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) return;
   moveCharacterByTile(event.code);
 });
