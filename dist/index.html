@@ -4,24 +4,38 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Three.js Terrain</title>
-    <script type="module" crossorigin src="/assets/index-BrIub6nc.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-C5FRFTEz.css">
+    <script type="module" crossorigin src="/assets/index-DDINmROV.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-D1OuKTED.css">
   </head>
   <body>
     <div id="start-menu" class="start-menu">
       <div class="start-panel">
         <img class="start-icon" src="/assets/THUMBNAIL%20copy-BXteCrOQ.png" alt="" />
         <p class="eyebrow">2nd Chance</p>
-        <h1>Match, swap, and clear a route.</h1>
-        <button id="start-button" type="button">Start</button>
+        <h1>Choose your challenge.</h1>
+        <div class="mode-actions">
+          <button id="time-challenge-button" type="button">Time Challenge</button>
+          <button id="point-frenzy-button" type="button">Point Frenzy</button>
+        </div>
       </div>
     </div>
     <div id="game-over-menu" class="start-menu hidden">
       <div class="start-panel">
         <img class="start-icon" src="/assets/THUMBNAIL%20copy-BXteCrOQ.png" alt="" />
-        <p class="eyebrow">Game Over</p>
-        <h1>No chances left.</h1>
+        <p id="game-over-eyebrow" class="eyebrow">Game Over</p>
+        <h1 id="game-over-title">No chances left.</h1>
         <button id="restart-button" type="button">Restart</button>
+      </div>
+    </div>
+    <div id="pause-menu" class="start-menu hidden">
+      <div class="start-panel">
+        <img class="start-icon" src="/assets/THUMBNAIL%20copy-BXteCrOQ.png" alt="" />
+        <p class="eyebrow">Paused</p>
+        <h1>Take a breath.</h1>
+        <div class="mode-actions">
+          <button id="resume-button" type="button">Resume</button>
+          <button id="quit-button" type="button">Quit</button>
+        </div>
       </div>
     </div>
     <div id="root"></div>
@@ -29,7 +43,25 @@
     <div id="tutorial-life-popup" class="tutorial-popup tutorial-life-popup hidden">
       Watch your health. Swapping takes 1 life, and breaking a hex adds 1 life. You only have 2 chances.
     </div>
+    <div id="round-message" class="round-message hidden">WOW!</div>
+    <div id="color-strip" class="color-strip" aria-label="Color history">
+      <div class="color-strip-entry">
+        <span class="color-strip-swatch"></span>
+        <span class="color-strip-label"></span>
+      </div>
+      <div class="color-strip-entry">
+        <span class="color-strip-swatch"></span>
+        <span class="color-strip-label"></span>
+      </div>
+      <div class="color-strip-entry current">
+        <span class="color-strip-swatch"></span>
+        <span class="color-strip-label"></span>
+      </div>
+    </div>
     <div id="level-counter" class="level-counter">Level 1</div>
     <div id="lives-counter" class="level-counter lives-counter">Lives 2</div>
+    <div id="timer-counter" class="level-counter timer-counter">3:00</div>
+    <div id="score-counter" class="level-counter score-counter hidden">Score 0</div>
+    <div id="target-counter" class="level-counter target-counter hidden">Target 100</div>
   </body>
 </html>

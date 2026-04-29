@@ -8,16 +8,31 @@ const TILE_SIZE = 1;
 const CAMERA_HEIGHT = 15;
 const MOVE_DURATION = 0.18;
 const MAX_LIVES = 2;
+const LEVEL_TIME_LIMIT = 180;
 
 const root = document.querySelector('#root');
 const startMenu = document.querySelector('#start-menu');
-const startButton = document.querySelector('#start-button');
+const timeChallengeButton = document.querySelector('#time-challenge-button');
+const pointFrenzyButton = document.querySelector('#point-frenzy-button');
 const gameOverMenu = document.querySelector('#game-over-menu');
 const restartButton = document.querySelector('#restart-button');
+const gameOverEyebrow = document.querySelector('#game-over-eyebrow');
+const gameOverTitle = document.querySelector('#game-over-title');
+const pauseMenu = document.querySelector('#pause-menu');
+const resumeButton = document.querySelector('#resume-button');
+const quitButton = document.querySelector('#quit-button');
 const levelCounter = document.querySelector('#level-counter');
 const livesCounter = document.querySelector('#lives-counter');
+const timerCounter = document.querySelector('#timer-counter');
+const scoreCounter = document.querySelector('#score-counter');
+const targetCounter = document.querySelector('#target-counter');
 const tutorialPopup = document.querySelector('#tutorial-popup');
 const tutorialLifePopup = document.querySelector('#tutorial-life-popup');
+const roundMessage = document.querySelector('#round-message');
+const colorStrip = document.querySelector('#color-strip');
+const colorStripEntries = [...document.querySelectorAll('.color-strip-entry')];
+const colorStripSwatches = [...document.querySelectorAll('.color-strip-swatch')];
+const colorStripLabels = [...document.querySelectorAll('.color-strip-label')];
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -31,10 +46,16 @@ let moveTween = null;
 let isRestarting = false;
 let hasStarted = false;
 let isGameOver = false;
+let isPaused = false;
 let isTutorial = true;
+let currentMode = 'time-challenge';
 let tutorialStep = 'break';
 let level = 1;
 let lives = MAX_LIVES;
+let timeRemaining = LEVEL_TIME_LIMIT;
+let score = 0;
+let pointTarget = 100;
+let colorHistory = [];
 const destroyEffects = [];
 let goalHint = null;
 let tutorialLockedHexagon = null;
@@ -216,12 +237,14 @@ const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x26352f, transparent:
 const tileGeometry = new THREE.BoxGeometry(TILE_SIZE, 0.16, TILE_SIZE);
 const lineGeometry = new THREE.EdgesGeometry(tileGeometry);
 const offset = ((BOARD_SIZE - 1) * TILE_SIZE) / 2;
+const boardTiles = [];
 
 for (let row = 0; row < BOARD_SIZE; row += 1) {
   for (let col = 0; col < BOARD_SIZE; col += 1) {
     const tileMaterial = cornerTiles[`${col},${row}`] || ((row + col) % 2 === 0 ? lightTile : darkTile);
     const tile = new THREE.Mesh(tileGeometry, tileMaterial);
     tile.position.set(col * TILE_SIZE - offset, 0, row * TILE_SIZE - offset);
+    boardTiles.push({ col, row, tile });
     board.add(tile);
 
     const outline = new THREE.LineSegments(lineGeometry, edgeMaterial);
@@ -309,6 +332,13 @@ const swapIndicatorMaterial = new THREE.MeshBasicMaterial({
   side: THREE.DoubleSide
 });
 const swapIndicators = [];
+const swapArrowMaterial = new THREE.MeshBasicMaterial({
+  transparent: true,
+  opacity: 0.92,
+  side: THREE.DoubleSide,
+  vertexColors: true
+});
+const swapArrowIndicators = [];
 const tutorialLockedIndicatorMaterial = new THREE.MeshBasicMaterial({
   color: 0xd93f35,
   transparent: false,
@@ -338,14 +368,21 @@ function isCornerTile(col, row) {
   return getCornerGoalColor(col, row) !== null;
 }
 
+function setBoardCornerGoalsVisible(isVisible) {
+  boardTiles.forEach(({ col, row, tile }) => {
+    tile.material =
+      isVisible && isCornerTile(col, row) ? cornerTiles[`${col},${row}`] : (row + col) % 2 === 0 ? lightTile : darkTile;
+  });
+}
+
 function getRandomHexColor() {
   return HEX_COLORS[Math.floor(Math.random() * HEX_COLORS.length)];
 }
 
-function populateHexagons() {
+function populateHexagons({ includeCorners = false } = {}) {
   for (let row = 0; row < BOARD_SIZE; row += 1) {
     for (let col = 0; col < BOARD_SIZE; col += 1) {
-      if (isCenterTile(col, row) || isCornerTile(col, row)) continue;
+      if (isCenterTile(col, row) || (!includeCorners && isCornerTile(col, row))) continue;
 
       const color = getRandomHexColor();
       swapHexagons.push(createSwapHexagon(color.value, color.outline, { col, row }));
@@ -376,13 +413,22 @@ function clearHexagons() {
 function resetBoard() {
   isRestarting = false;
   isGameOver = false;
+  isPaused = false;
+  isTutorial = false;
   moveTween = null;
+  pauseMenu.classList.add('hidden');
   hideSwapIndicators();
+  hideTutorialLockedIndicator();
+  tutorialPopup.classList.add('hidden');
+  tutorialLifePopup.classList.add('hidden');
   clearHexagons();
   characterGrid.col = Math.floor(BOARD_SIZE / 2);
   characterGrid.row = Math.floor(BOARD_SIZE / 2);
   character.material.color.setHex(PLAYER_START_COLOR);
+  resetColorHistory();
   lives = MAX_LIVES;
+  resetLevelTimer();
+  updateModeHud();
   updateLivesCounter();
   placeCharacterOnGrid();
   updateGoalHint();
@@ -390,37 +436,144 @@ function resetBoard() {
 }
 
 function startTutorial() {
+  currentMode = 'time-challenge';
   isTutorial = true;
   tutorialStep = 'break';
   tutorialLockedHexagon = null;
+  setBoardCornerGoalsVisible(true);
   hideTutorialLockedIndicator();
   tutorialLifePopup.classList.add('hidden');
   resetBoard();
+  isTutorial = true;
   clearHexagons();
   populateTutorialHexagons();
+  updateModeHud();
   updateTutorialPopup();
   updateGoalHint();
   updateSwapIndicators();
 }
 
 function startNormalGame() {
+  currentMode = 'time-challenge';
   isTutorial = false;
   tutorialLockedHexagon = null;
+  setBoardCornerGoalsVisible(true);
   hideTutorialLockedIndicator();
   tutorialPopup.classList.add('hidden');
   tutorialLifePopup.classList.add('hidden');
   resetBoard();
   populateHexagons();
+  updateModeHud();
+  updateGoalHint();
+  updateSwapIndicators();
+}
+
+function startPointFrenzy() {
+  currentMode = 'point-frenzy';
+  isTutorial = false;
+  tutorialLockedHexagon = null;
+  score = 0;
+  pointTarget = getRandomPointTarget();
+  setBoardCornerGoalsVisible(false);
+  resetBoard();
+  populateHexagons({ includeCorners: true });
+  updateModeHud();
+  updateScoreCounter();
   updateGoalHint();
   updateSwapIndicators();
 }
 
 function updateLevelCounter() {
-  levelCounter.textContent = `Level ${level}`;
+  levelCounter.textContent = currentMode === 'time-challenge' ? `Level ${level}` : 'Point Frenzy';
 }
 
 function updateLivesCounter() {
   livesCounter.textContent = `Lives ${lives}`;
+}
+
+function getRandomPointTarget() {
+  return 50 + Math.floor(Math.random() * 26) * 10;
+}
+
+function updateScoreCounter() {
+  scoreCounter.textContent = `Score ${score}`;
+  targetCounter.textContent = `Target ${pointTarget}`;
+}
+
+function updateModeHud() {
+  const isPointFrenzy = currentMode === 'point-frenzy';
+
+  timerCounter.classList.toggle('hidden', isPointFrenzy);
+  scoreCounter.classList.toggle('hidden', !isPointFrenzy);
+  targetCounter.classList.toggle('hidden', !isPointFrenzy);
+  updateLevelCounter();
+  updateLivesCounter();
+  updateTimerCounter();
+  updateScoreCounter();
+}
+
+function formatTime(seconds) {
+  const clampedSeconds = Math.max(Math.ceil(seconds), 0);
+  const minutes = Math.floor(clampedSeconds / 60);
+  const remainingSeconds = clampedSeconds % 60;
+
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+function updateTimerCounter() {
+  timerCounter.textContent = formatTime(timeRemaining);
+}
+
+function resetLevelTimer() {
+  timeRemaining = LEVEL_TIME_LIMIT;
+  updateTimerCounter();
+}
+
+function updateLevelTimer(delta) {
+  if (currentMode !== 'time-challenge' || !hasStarted || isTutorial || isGameOver || isPaused || isRestarting) return;
+
+  timeRemaining = Math.max(timeRemaining - delta, 0);
+  updateTimerCounter();
+
+  if (timeRemaining === 0) {
+    showGameOver();
+  }
+}
+
+function hexToCss(color) {
+  return `#${color.toString(16).padStart(6, '0')}`;
+}
+
+function updateColorStrip(animate = false) {
+  colorStripEntries.forEach((entry, index) => {
+    const historyItem = colorHistory[index];
+    const swatch = colorStripSwatches[index];
+    const label = colorStripLabels[index];
+
+    swatch.style.backgroundColor = hexToCss(historyItem.color);
+    label.textContent = historyItem.action;
+    entry.classList.toggle('current', index === colorHistory.length - 1);
+  });
+
+  if (!animate) return;
+
+  colorStrip.classList.remove('scrolling');
+  void colorStrip.offsetWidth;
+  colorStrip.classList.add('scrolling');
+}
+
+function resetColorHistory() {
+  colorHistory = [
+    { color: PLAYER_START_COLOR, action: '' },
+    { color: PLAYER_START_COLOR, action: '' },
+    { color: PLAYER_START_COLOR, action: '' }
+  ];
+  updateColorStrip();
+}
+
+function pushColorHistory(color, action) {
+  colorHistory = [...colorHistory.slice(1), { color, action }];
+  updateColorStrip(true);
 }
 
 function updateTutorialPopup() {
@@ -490,6 +643,10 @@ function hideSwapIndicators() {
   swapIndicators.forEach((indicator) => {
     indicator.visible = false;
   });
+
+  swapArrowIndicators.forEach((indicator) => {
+    indicator.visible = false;
+  });
 }
 
 function getSwapIndicator(index) {
@@ -500,6 +657,64 @@ function getSwapIndicator(index) {
   indicator.position.y = 0.18;
   indicator.visible = false;
   swapIndicators.push(indicator);
+  scene.add(indicator);
+
+  return indicator;
+}
+
+function createDoubleArrowGeometry(directionCol, directionRow, playerColor, hexagonColor) {
+  const direction = new THREE.Vector3(directionCol, 0, directionRow).normalize();
+  const perpendicular = new THREE.Vector3(-direction.z, 0, direction.x);
+  const center = new THREE.Vector3(0, 0, 0);
+  const points = [
+    {
+      tip: center.clone().addScaledVector(direction, 0.3),
+      base: center.clone().addScaledVector(direction, 0.08),
+      color: playerColor
+    },
+    {
+      tip: center.clone().addScaledVector(direction, -0.3),
+      base: center.clone().addScaledVector(direction, -0.08),
+      color: hexagonColor
+    }
+  ];
+  const vertices = [];
+  const colors = [];
+
+  points.forEach(({ tip, base, color }) => {
+    const left = base.clone().addScaledVector(perpendicular, 0.13);
+    const right = base.clone().addScaledVector(perpendicular, -0.13);
+    const arrowColor = new THREE.Color(color);
+
+    vertices.push(tip.x, 0, tip.z, left.x, 0, left.z, right.x, 0, right.z);
+    colors.push(
+      arrowColor.r,
+      arrowColor.g,
+      arrowColor.b,
+      arrowColor.r,
+      arrowColor.g,
+      arrowColor.b,
+      arrowColor.r,
+      arrowColor.g,
+      arrowColor.b
+    );
+  });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+
+  return geometry;
+}
+
+function getSwapArrowIndicator(index) {
+  if (swapArrowIndicators[index]) return swapArrowIndicators[index];
+
+  const indicator = new THREE.Mesh(new THREE.BufferGeometry(), swapArrowMaterial);
+  indicator.position.y = 0.45;
+  indicator.visible = false;
+  swapArrowIndicators.push(indicator);
   scene.add(indicator);
 
   return indicator;
@@ -532,19 +747,25 @@ function showTutorialLockedIndicator(hexagon) {
 }
 
 function updateSwapIndicators() {
-  if (isRestarting) {
+  if (isRestarting || isGameOver || isPaused) {
     hideSwapIndicators();
     return;
   }
 
-  const nearbySameColorHexagons = swapHexagons.filter((hexagon) => {
+  const nearbyHexagons = swapHexagons.filter((hexagon) => {
     const distance =
       Math.abs(characterGrid.col - hexagon.grid.col) + Math.abs(characterGrid.row - hexagon.grid.row);
 
-    return distance === 1 && character.material.color.equals(hexagon.mesh.material.color);
+    return distance === 1 && (!isTutorial || hexagon !== tutorialLockedHexagon);
   });
+  const nearbySameColorHexagons = nearbyHexagons.filter((hexagon) =>
+    character.material.color.equals(hexagon.mesh.material.color)
+  );
+  const nearbyDifferentColorHexagons = nearbyHexagons.filter(
+    (hexagon) => !character.material.color.equals(hexagon.mesh.material.color)
+  );
 
-  if (nearbySameColorHexagons.length === 0) {
+  if (nearbySameColorHexagons.length === 0 && nearbyDifferentColorHexagons.length === 0) {
     hideSwapIndicators();
     return;
   }
@@ -568,10 +789,26 @@ function updateSwapIndicators() {
     indicator.position.z = centerRow * TILE_SIZE - offset;
     indicator.visible = true;
   });
+
+  nearbyDifferentColorHexagons.forEach((hexagon, index) => {
+    const indicator = getSwapArrowIndicator(index);
+    const directionCol = hexagon.grid.col - characterGrid.col;
+    const directionRow = hexagon.grid.row - characterGrid.row;
+    const centerCol = (characterGrid.col + hexagon.grid.col) / 2;
+    const centerRow = (characterGrid.row + hexagon.grid.row) / 2;
+    const playerColor = character.material.color.getHex();
+    const hexagonColor = hexagon.mesh.material.color.getHex();
+
+    indicator.geometry.dispose();
+    indicator.geometry = createDoubleArrowGeometry(directionCol, directionRow, playerColor, hexagonColor);
+    indicator.position.x = centerCol * TILE_SIZE - offset;
+    indicator.position.z = centerRow * TILE_SIZE - offset;
+    indicator.visible = true;
+  });
 }
 
 function moveCharacterByTile(code) {
-  if (moveTween || isRestarting || isGameOver) return;
+  if (moveTween || isRestarting || isGameOver || isPaused) return;
   if (!isTutorialMoveAllowed(code)) return;
 
   let nextCol = characterGrid.col;
@@ -622,10 +859,11 @@ function swapHexagonColors(hexagon) {
   const characterColor = character.material.color.clone();
   character.material.color.copy(hexagon.mesh.material.color);
   hexagon.mesh.material.color.copy(characterColor);
+  pushColorHistory(character.material.color.getHex(), 'Swap');
   updateGoalHint();
   loseLife();
 
-  if (isTutorial && tutorialStep === 'swap') {
+  if (currentMode === 'time-challenge' && isTutorial && tutorialStep === 'swap') {
     tutorialLockedHexagon = hexagon;
     showTutorialLockedIndicator(hexagon);
     tutorialLifePopup.classList.remove('hidden');
@@ -634,14 +872,41 @@ function swapHexagonColors(hexagon) {
 }
 
 function destroyHexagon(hexagon) {
+  const destroyedColor = hexagon.mesh.material.color.getHex();
   createDestroyEffect(hexagon.mesh.position);
   disposeHexagon(hexagon);
   swapHexagons = swapHexagons.filter((current) => current !== hexagon);
+  pushColorHistory(destroyedColor, 'Break');
+  addPointFrenzyScore();
   gainLife();
 
-  if (isTutorial && tutorialStep === 'break') {
+  if (currentMode === 'time-challenge' && isTutorial && tutorialStep === 'break') {
     advanceTutorialStep('swap');
   }
+}
+
+function addPointFrenzyScore() {
+  if (currentMode !== 'point-frenzy' || isGameOver) return;
+
+  score += 10;
+  updateScoreCounter();
+
+  if (score >= pointTarget) {
+    completePointFrenzyRound();
+  }
+}
+
+function completePointFrenzyRound() {
+  isRestarting = true;
+  hideSwapIndicators();
+  roundMessage.textContent = 'WOW!';
+  roundMessage.classList.remove('hidden');
+  window.setTimeout(() => {
+    roundMessage.classList.add('hidden');
+    if (currentMode === 'point-frenzy' && hasStarted && !isGameOver) {
+      startPointFrenzy();
+    }
+  }, 900);
 }
 
 function loseLife() {
@@ -658,24 +923,90 @@ function gainLife() {
   updateLivesCounter();
 }
 
-function showGameOver() {
+function pauseGame() {
+  if (!hasStarted || isGameOver || isPaused) return;
+
+  isPaused = true;
+  pauseMenu.classList.remove('hidden');
+}
+
+function resumeGame() {
+  if (!isPaused) return;
+
+  isPaused = false;
+  pauseMenu.classList.add('hidden');
+}
+
+function togglePause() {
+  if (isPaused) {
+    resumeGame();
+    return;
+  }
+
+  pauseGame();
+}
+
+function quitToMainMenu() {
+  hasStarted = false;
+  isPaused = false;
+  isGameOver = false;
+  isRestarting = false;
+  isTutorial = false;
+  moveTween = null;
+  tutorialLockedHexagon = null;
+  hideSwapIndicators();
+  hideGoalHint();
+  hideTutorialLockedIndicator();
+  clearHexagons();
+  pauseMenu.classList.add('hidden');
+  gameOverMenu.classList.add('hidden');
+  tutorialPopup.classList.add('hidden');
+  tutorialLifePopup.classList.add('hidden');
+  roundMessage.classList.add('hidden');
+  startMenu.classList.remove('hidden');
+  setBoardCornerGoalsVisible(true);
+  characterGrid.col = Math.floor(BOARD_SIZE / 2);
+  characterGrid.row = Math.floor(BOARD_SIZE / 2);
+  character.material.color.setHex(PLAYER_START_COLOR);
+  placeCharacterOnGrid();
+  resetColorHistory();
+  lives = MAX_LIVES;
+  level = 1;
+  score = 0;
+  pointTarget = 100;
+  resetLevelTimer();
+  updateModeHud();
+}
+
+function showGameOver(eyebrow = 'Game Over', title = 'No chances left.') {
   isGameOver = true;
+  isPaused = false;
   hasStarted = false;
   moveTween = null;
   hideSwapIndicators();
   hideGoalHint();
+  pauseMenu.classList.add('hidden');
+  gameOverEyebrow.textContent = eyebrow;
+  gameOverTitle.textContent = title;
   gameOverMenu.classList.remove('hidden');
 }
 
 function restartAfterGameOver() {
-  level = 1;
-  updateLevelCounter();
   gameOverMenu.classList.add('hidden');
   hasStarted = true;
+  if (currentMode === 'point-frenzy') {
+    startPointFrenzy();
+    return;
+  }
+
+  level = 1;
+  updateLevelCounter();
   startTutorial();
 }
 
 function checkWinCondition() {
+  if (currentMode !== 'time-challenge') return;
+
   const goalColor = getCornerGoalColor(characterGrid.col, characterGrid.row);
   if (!goalColor || character.material.color.getHex() !== goalColor || isRestarting) return;
 
@@ -735,6 +1066,11 @@ function hideGoalHint() {
 
 function updateGoalHint() {
   if (!goalHint) goalHint = createGoalHint();
+
+  if (currentMode !== 'time-challenge') {
+    hideGoalHint();
+    return;
+  }
 
   const playerColor = character.material.color.getHex();
   const matchingGoal = goalCorners.find((corner) => corner.color === playerColor);
@@ -863,27 +1199,56 @@ function resize() {
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
-  updateCharacterMove(delta);
-  updateDestroyEffects(delta);
-  updateGoalHintEffect(delta);
-  updateWaterEffect(delta);
+
+  if (!isPaused) {
+    updateCharacterMove(delta);
+    updateDestroyEffects(delta);
+    updateGoalHintEffect(delta);
+    updateLevelTimer(delta);
+    updateWaterEffect(delta);
+  }
+
   controls.update();
   renderer.render(scene, camera);
 }
 
 updateLevelCounter();
 updateLivesCounter();
-startTutorial();
+updateModeHud();
+setBoardCornerGoalsVisible(true);
 window.addEventListener('resize', resize);
-startButton.addEventListener('click', () => {
+
+function startSelectedMode(mode) {
+  currentMode = mode;
   hasStarted = true;
   startMenu.classList.add('hidden');
-  updateTutorialPopup();
-});
+  gameOverMenu.classList.add('hidden');
+
+  if (mode === 'point-frenzy') {
+    startPointFrenzy();
+    return;
+  }
+
+  level = 1;
+  updateLevelCounter();
+  startTutorial();
+}
+
+timeChallengeButton.addEventListener('click', () => startSelectedMode('time-challenge'));
+pointFrenzyButton.addEventListener('click', () => startSelectedMode('point-frenzy'));
 restartButton.addEventListener('click', restartAfterGameOver);
+resumeButton.addEventListener('click', resumeGame);
+quitButton.addEventListener('click', quitToMainMenu);
 window.addEventListener('keydown', (event) => {
+  if (event.repeat) return;
+
+  if (event.code === 'Escape') {
+    togglePause();
+    return;
+  }
+
   if (!hasStarted || isGameOver) return;
-  if (event.repeat || !['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) return;
+  if (!['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) return;
   moveCharacterByTile(event.code);
 });
 animate();

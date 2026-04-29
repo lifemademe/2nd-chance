@@ -77,8 +77,11 @@ canvas {
   line-height: 1.05;
 }
 
-#start-button,
-#restart-button {
+#time-challenge-button,
+#point-frenzy-button,
+#restart-button,
+#resume-button,
+#quit-button {
   min-width: 132px;
   padding: 12px 22px;
   color: #13201d;
@@ -89,9 +92,18 @@ canvas {
   cursor: pointer;
 }
 
-#start-button:hover,
-#restart-button:hover {
+#time-challenge-button:hover,
+#point-frenzy-button:hover,
+#restart-button:hover,
+#resume-button:hover,
+#quit-button:hover {
   background: #ffd84d;
+}
+
+.mode-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
 }
 
 .level-counter {
@@ -114,6 +126,93 @@ canvas {
   left: auto;
   right: 18px;
   transform: none;
+}
+
+.timer-counter {
+  left: auto;
+  right: 18px;
+  bottom: 64px;
+  transform: none;
+  min-width: 68px;
+  text-align: center;
+}
+
+.score-counter {
+  left: auto;
+  right: 18px;
+  bottom: 64px;
+  transform: none;
+  min-width: 92px;
+  text-align: center;
+}
+
+.target-counter {
+  left: auto;
+  right: 18px;
+  bottom: 110px;
+  transform: none;
+  min-width: 92px;
+  text-align: center;
+}
+
+.hidden {
+  display: none;
+}
+
+.color-strip {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 4;
+  display: grid;
+  gap: 6px;
+  min-width: 98px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(20, 28, 27, 0.76);
+}
+
+.color-strip.scrolling {
+  animation: color-scroll 180ms ease-out;
+}
+
+.color-strip-entry {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.color-strip-swatch {
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 6px;
+  background: #4fc3f7;
+}
+
+.color-strip-entry.current .color-strip-swatch {
+  border-color: #ffffff;
+}
+
+.color-strip-label {
+  min-width: 42px;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+@keyframes color-scroll {
+  from {
+    transform: translateY(12px);
+  }
+
+  to {
+    transform: translateY(0);
+  }
 }
 
 .tutorial-popup {
@@ -141,4 +240,20 @@ canvas {
 .tutorial-life-popup {
   top: auto;
   bottom: 64px;
+}
+
+.round-message {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 6;
+  transform: translate(-50%, -50%);
+  padding: 18px 28px;
+  color: #ffffff;
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 8px;
+  background: rgba(20, 28, 27, 0.82);
 }
